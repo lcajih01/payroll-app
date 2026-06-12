@@ -157,6 +157,66 @@ describe('payroll with benefits (2nd cutoff)', () => {
   })
 })
 
+// Core contract: employee share reduces Net Pay; employer share NEVER does —
+// employer contributions only affect Company Cost.
+describe('employee vs employer contribution contract', () => {
+  // Rates where the employer share is huge, to make any leak into net obvious.
+  const rates = {
+    sss_employee: 300, sss_employer: 5000,
+    philhealth_employee: 200, philhealth_employer: 5000,
+    pagibig_employee: 100, pagibig_employer: 5000,
+  }
+  const EE_TOTAL = 600    // 300 + 200 + 100
+  const ER_TOTAL = 15000  // 3 × 5000
+
+  const cases = [
+    ['fixed monthly', { id: 'f', business_id: 'b', pay_type: 'fixed', rate: 13000, ...allBenefits }, {}, 6500],
+    ['daily', { id: 'd', business_id: 'b', pay_type: 'daily', rate: 450, ...allBenefits }, { units: 13 }, 5850],
+    ['per booking / occupied day', { id: 'p', business_id: 'b', pay_type: 'per_unit', rate: 300, ...allBenefits }, { units: 12 }, 3600],
+  ]
+
+  for (const [label, emp, opts, gross] of cases) {
+    it(`${label}: EE reduces net, ER only affects company cost`, () => {
+      const e = buildEntry(emp, { ...cutoff2, ...opts, benefitRates: rates })
+      expect(e.gross).toBe(gross)
+      // Employee contribution reduces Net Pay — by EXACTLY the employee total.
+      expect(e.total_employee_benefits).toBe(EE_TOTAL)
+      expect(e.net).toBe(gross - EE_TOTAL)
+      // Employer contribution does NOT reduce Net Pay.
+      expect(e.net).not.toBe(gross - EE_TOTAL - ER_TOTAL)
+      // Employer contribution only affects Company Cost.
+      expect(e.total_employer_contributions).toBe(ER_TOTAL)
+      expect(e.company_cost).toBe(gross + ER_TOTAL)
+    })
+  }
+
+  it('changing ONLY employer rates leaves net pay identical', () => {
+    const emp = { id: 'f', business_id: 'b', pay_type: 'fixed', rate: 13000, ...allBenefits }
+    const small = { ...rates, sss_employer: 0, philhealth_employer: 0, pagibig_employer: 0 }
+    const a = buildEntry(emp, { ...cutoff2, benefitRates: rates })
+    const b = buildEntry(emp, { ...cutoff2, benefitRates: small })
+    expect(a.net).toBe(b.net)                          // net unaffected by ER
+    expect(a.company_cost).toBe(b.company_cost + ER_TOTAL) // cost moves with ER
+  })
+
+  it('net formula matches spec: gross - CA - other - employee contributions', () => {
+    const emp = { id: 'f', business_id: 'b', pay_type: 'fixed', rate: 13000, ...allBenefits }
+    const e = buildEntry(emp, { ...cutoff2, caDeduction: 2000, otherDeduction: 500, benefitRates: rates })
+    expect(e.net).toBe(6500 - 2000 - 500 - EE_TOTAL) // 3400
+    expect(e.company_cost).toBe(6500 + ER_TOTAL)     // CA/other never touch company cost
+  })
+
+  it('summary: employer total is reported separately and never inside deductions', () => {
+    const emp = { id: 'f', business_id: 'b', pay_type: 'fixed', rate: 13000, ...allBenefits }
+    const s = summarize([buildEntry(emp, { ...cutoff2, benefitRates: rates })])
+    expect(s.benefitsDeducted).toBe(EE_TOTAL)
+    expect(s.totalDeductions).toBe(EE_TOTAL)          // ER excluded
+    expect(s.employerContributions).toBe(ER_TOTAL)
+    expect(s.netPayroll).toBe(6500 - EE_TOTAL)
+    expect(s.companyCost).toBe(6500 + ER_TOTAL)
+  })
+})
+
 describe('benefit settings changes vs paid payroll', () => {
   const emp = { id: 'e1', business_id: 'b1', pay_type: 'fixed', rate: 13000, ...allBenefits }
   const doubled = { ...DEFAULT_BENEFIT_RATES, sss_employee: 500, sss_employer: 1020 }

@@ -67,6 +67,31 @@ export function DataProvider({ children }) {
 
   // ---------- Employees ----------
 
+  // Re-apply current benefit settings to one employee's unpaid entries.
+  // Used when benefit checkboxes change so payslips update immediately.
+  // Paid entries and rate/units snapshots are never touched.
+  const syncBenefitsToEntries = useCallback(async (employee) => {
+    const periodById = new Map(periods.map(p => [p.id, p]))
+    const targets = entries.filter(e => e.employee_id === employee.id && e.status === 'unpaid')
+    const updatedRows = []
+    for (const entry of targets) {
+      const period = periodById.get(entry.period_id)
+      if (!period) continue
+      const updated = refreshEntryBenefits(entry, employee, benefitRates, period.cutoff)
+      if (updated.net === entry.net &&
+          updated.total_employee_benefits === entry.total_employee_benefits &&
+          updated.total_employer_contributions === entry.total_employer_contributions) continue
+      const { data, error } = await supabase.from('payroll_entries')
+        .update(benefitEntryFields(updated))
+        .eq('id', entry.id).eq('status', 'unpaid').select().single()
+      if (error) throw error
+      updatedRows.push(data)
+    }
+    if (updatedRows.length) {
+      setEntries(prev => prev.map(e => updatedRows.find(u => u.id === e.id) || e))
+    }
+  }, [entries, periods, benefitRates])
+
   const saveEmployee = useCallback(async (form, id = null) => {
     const row = {
       business_id: form.business_id,
@@ -88,8 +113,12 @@ export function DataProvider({ children }) {
     const { data, error } = await q
     if (error) throw friendly(error, 'An employee with this name already exists for this business.')
     setEmployees(prev => sortEmployees(id ? prev.map(e => e.id === id ? data : e) : [...prev, data], businesses))
+    // Benefit checkboxes changed? Re-apply benefits to this employee's UNPAID
+    // entries right away so payslips reflect the change without a manual
+    // "Update Payroll". Paid entries and rate/units snapshots are untouched.
+    if (id) await syncBenefitsToEntries(data)
     return data
-  }, [businesses])
+  }, [businesses, syncBenefitsToEntries])
 
   const setEmployeeStatus = useCallback(async (id, status) => {
     const { data, error } = await supabase.from('employees').update({ status }).eq('id', id).select().single()
@@ -182,20 +211,7 @@ export function DataProvider({ children }) {
         // Keep owner-edited units & other deductions; refresh the CA total and
         // re-apply current benefit settings. Paid entries are never touched.
         const updated = refreshEntryBenefits(recomputeEntry(current, { caDeduction: caTotal }), emp, benefitRates, cutoff)
-        updates.push({
-          id: updated.id,
-          ca_deduction: updated.ca_deduction,
-          sss_employee: updated.sss_employee,
-          philhealth_employee: updated.philhealth_employee,
-          pagibig_employee: updated.pagibig_employee,
-          sss_employer: updated.sss_employer,
-          philhealth_employer: updated.philhealth_employer,
-          pagibig_employer: updated.pagibig_employer,
-          total_employee_benefits: updated.total_employee_benefits,
-          total_employer_contributions: updated.total_employer_contributions,
-          net: updated.net,
-          company_cost: updated.company_cost,
-        })
+        updates.push({ id: updated.id, ca_deduction: updated.ca_deduction, ...benefitEntryFields(updated) })
       }
     }
 
@@ -342,4 +358,21 @@ export function DataProvider({ children }) {
 function friendly(error, duplicateMessage) {
   if (error.code === '23505') return new Error(duplicateMessage)
   return error
+}
+
+// The benefit snapshot columns persisted when re-applying benefit settings
+// to an unpaid entry (plus the derived net and company cost).
+function benefitEntryFields(e) {
+  return {
+    sss_employee: e.sss_employee,
+    philhealth_employee: e.philhealth_employee,
+    pagibig_employee: e.pagibig_employee,
+    sss_employer: e.sss_employer,
+    philhealth_employer: e.philhealth_employer,
+    pagibig_employer: e.pagibig_employer,
+    total_employee_benefits: e.total_employee_benefits,
+    total_employer_contributions: e.total_employer_contributions,
+    net: e.net,
+    company_cost: e.company_cost,
+  }
 }
