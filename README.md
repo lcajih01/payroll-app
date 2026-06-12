@@ -16,9 +16,9 @@ Built with React + Vite + Tailwind CSS v4 + Supabase. Owner-operated, 10–50 em
 
 ### Payroll integrity rules
 
-- Payroll entries store **snapshots** (rate, gross, deductions, benefit amounts, net, company cost) at generation time — editing an employee's rate or the benefit settings later never rewrites history.
-- Changing benefit settings affects **newly generated and unpaid** payroll only (unpaid entries refresh when you press Generate/Update Payroll); paid entries keep their snapshots, enforced by a DB trigger.
-- Regenerating a cutoff **updates existing entries instead of duplicating** (`UNIQUE (period_id, employee_id)` + upsert) and never touches paid entries or your edited counts.
+- Payroll entries store **snapshots** (rate, gross, deductions, benefit amounts, net, company cost). **Paid entries are locked** — they never change unless explicitly reverted, enforced by a DB trigger.
+- **Refresh Payroll** recalculates all **unpaid** entries from the current employee setup (rate, pay type, benefit checkboxes), current benefit rates, and current cash advances — keeping owner-entered day/booking counts and other deductions — and adds missing active employees. A per-row **Revert** does the same for one entry (with confirmation if it is paid: payment info is cleared first).
+- Regenerating a cutoff **updates existing entries instead of duplicating** (`UNIQUE (period_id, employee_id)` + upsert).
 - Changing/deleting a cash advance recomputes **unpaid** entries only; paid entries never silently change (also enforced by a DB trigger).
 - Mark Paid saves status + method + date and writes a `payroll_payments` audit row; Undo Paid reverses all of it.
 - **Remaining Payable counts only unpaid payroll.**

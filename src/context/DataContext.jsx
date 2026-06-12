@@ -182,11 +182,61 @@ export function DataProvider({ children }) {
 
   // ---------- Payroll ----------
 
+  // Rebuild an unpaid entry's persisted fields from the CURRENT employee
+  // setup (rate, pay type, business, benefit checkboxes), current benefit
+  // rates and current cash advances. Owner-entered units and other
+  // deductions are preserved.
+  const rebuildFields = useCallback((emp, { year, month, cutoff }, current) => {
+    const caTotal = cashAdvanceTotal(cashAdvances, emp.id, year, month, cutoff)
+    const rebuilt = buildEntry(emp, {
+      year, month, cutoff,
+      units: current.units,
+      caDeduction: caTotal,
+      otherDeduction: current.other_deduction,
+      benefitRates,
+    })
+    return {
+      business_id: rebuilt.business_id,
+      pay_type: rebuilt.pay_type,
+      rate: rebuilt.rate,
+      units: rebuilt.units,
+      gross: rebuilt.gross,
+      ca_deduction: rebuilt.ca_deduction,
+      other_deduction: rebuilt.other_deduction,
+      ...benefitEntryFields(rebuilt),
+    }
+  }, [cashAdvances, benefitRates])
+
+  // Revert a single entry: if paid, reverse the payment first (status back to
+  // unpaid, payment info cleared, audit row removed), then recalculate it
+  // from the current employee setup and current cash advances.
+  const revertEntry = useCallback(async (entryId) => {
+    const entry = entries.find(e => e.id === entryId)
+    if (!entry) throw new Error('Entry not found')
+    const period = periods.find(p => p.id === entry.period_id)
+    const emp = employees.find(e => e.id === entry.employee_id)
+    if (!period) throw new Error('Payroll period not found')
+    if (!emp) throw new Error('Employee no longer exists')
+    if (entry.status === 'paid') {
+      const { error } = await supabase.from('payroll_entries')
+        .update({ status: 'unpaid', paid_at: null, payment_method: null })
+        .eq('id', entryId).eq('status', 'paid')
+      if (error) throw error
+      const { error: payErr } = await supabase.from('payroll_payments').delete().eq('entry_id', entryId)
+      if (payErr) throw payErr
+    }
+    const { data, error } = await supabase.from('payroll_entries')
+      .update(rebuildFields(emp, period, entry))
+      .eq('id', entryId).eq('status', 'unpaid').select().single()
+    if (error) throw error
+    setEntries(prev => prev.map(e => e.id === entryId ? data : e))
+  }, [entries, periods, employees, rebuildFields])
+
   // Generate (or refresh) payroll for a cutoff. Idempotent:
   //  - period is upserted on (year, month, cutoff)
-  //  - entries are upserted on (period_id, employee_id)
+  //  - entries are upserted on (period_id, employee_id) — never duplicated
   //  - existing PAID entries are never modified
-  //  - existing UNPAID entries get refreshed CA totals but keep edited units/deductions
+  //  - existing UNPAID entries are recalculated from the current setup
   const generatePayroll = useCallback(async ({ year, month, cutoff, businessId = null }) => {
     const { data: period, error: pErr } = await supabase
       .from('payroll_periods')
@@ -208,10 +258,11 @@ export function DataProvider({ children }) {
       if (!current) {
         inserts.push({ ...buildEntry(emp, { year, month, cutoff, caDeduction: caTotal, benefitRates }), period_id: period.id })
       } else if (current.status === 'unpaid') {
-        // Keep owner-edited units & other deductions; refresh the CA total and
-        // re-apply current benefit settings. Paid entries are never touched.
-        const updated = refreshEntryBenefits(recomputeEntry(current, { caDeduction: caTotal }), emp, benefitRates, cutoff)
-        updates.push({ id: updated.id, ca_deduction: updated.ca_deduction, ...benefitEntryFields(updated) })
+        // Rebuild the unpaid entry from the CURRENT employee setup: current
+        // rate/pay type, current benefit checkboxes and rates, and current
+        // cash advances. Owner-entered units and other deductions are kept.
+        // Paid entries are never touched.
+        updates.push({ id: current.id, ...rebuildFields(emp, { year, month, cutoff }, current) })
       }
     }
 
@@ -237,7 +288,7 @@ export function DataProvider({ children }) {
     setPeriods(perRes.data)
     setEntries(entRes.data)
     return { period, created: inserts.length, refreshed: updates.length }
-  }, [employees, entries, cashAdvances, benefitRates])
+  }, [employees, entries, cashAdvances, benefitRates, rebuildFields])
 
   // Edit units / other deduction on an unpaid entry; recomputes and persists.
   const updateEntry = useCallback(async (entryId, { units, otherDeduction }) => {
@@ -344,12 +395,12 @@ export function DataProvider({ children }) {
     benefitRates, saveBenefitRates,
     saveEmployee, setEmployeeStatus,
     saveCashAdvance, deleteCashAdvance,
-    generatePayroll, updateEntry, markEntryPaid, undoEntryPaid,
+    generatePayroll, updateEntry, markEntryPaid, undoEntryPaid, revertEntry,
     saveBusiness, backupJSON, restoreJSON, resetDemoData, fetchPayments,
   }), [loading, error, loadAll, businesses, employees, cashAdvances, periods, entries,
     benefitRates, saveBenefitRates,
     saveEmployee, setEmployeeStatus, saveCashAdvance, deleteCashAdvance,
-    generatePayroll, updateEntry, markEntryPaid, undoEntryPaid,
+    generatePayroll, updateEntry, markEntryPaid, undoEntryPaid, revertEntry,
     saveBusiness, backupJSON, restoreJSON, resetDemoData, fetchPayments])
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

@@ -4,14 +4,22 @@ import { summarize, employeeComparator, PAY_TYPES } from '../lib/payroll'
 import { fmtMoney } from '../lib/format'
 import PeriodPicker from '../components/PeriodPicker'
 import PayslipSheet from '../components/Payslip'
-import { Sheet, Button, Field, Input, Avatar, Badge, EmptyState, useToast } from '../components/ui'
+import { Sheet, Button, Field, Input, Avatar, Badge, EmptyState, Confirm, useToast } from '../components/ui'
 
 export default function Payroll({ period, setPeriod }) {
-  const { employees, businesses, periods, entries, generatePayroll, updateEntry, markEntryPaid, undoEntryPaid } = useData()
+  const { employees, businesses, periods, entries, generatePayroll, updateEntry, markEntryPaid, undoEntryPaid, revertEntry } = useData()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [editingEntry, setEditingEntry] = useState(null)
   const [payslipEntry, setPayslipEntry] = useState(null)
+  const [confirmRevert, setConfirmRevert] = useState(null) // paid entry pending revert
+
+  const onRevert = async (entry) => {
+    try {
+      await revertEntry(entry.id)
+      toast('Entry recalculated from current setup')
+    } catch (e) { toast(e.message, 'error') }
+  }
 
   const activePeriod = periods.find(p =>
     p.year === period.year && p.month === period.month && p.cutoff === period.cutoff)
@@ -37,7 +45,7 @@ export default function Payroll({ period, setPeriod }) {
       const res = await generatePayroll({ ...period, businessId: period.businessId })
       toast(res.created
         ? `Payroll generated for ${res.created} employee${res.created === 1 ? '' : 's'}`
-        : 'Payroll is up to date — existing entries kept')
+        : `Payroll refreshed — ${res.refreshed} unpaid entr${res.refreshed === 1 ? 'y' : 'ies'} recalculated`)
     } catch (e) { toast(e.message, 'error') } finally { setBusy(false) }
   }
 
@@ -64,11 +72,11 @@ export default function Payroll({ period, setPeriod }) {
       </section>
 
       <Button className="w-full" variant={hasPayroll ? 'soft' : 'primary'} disabled={busy} onClick={onGenerate}>
-        {busy ? 'Working…' : hasPayroll ? 'Update Payroll (refresh advances, add new hires)' : 'Generate Payroll'}
+        {busy ? 'Working…' : hasPayroll ? 'Refresh Payroll' : 'Generate Payroll'}
       </Button>
       {hasPayroll && (
         <p className="-mt-2 text-center text-[11px] leading-relaxed text-ink3">
-          Updating never changes paid entries or your edited counts — it only refreshes cash advances and adds missing employees.
+          Refresh recalculates all unpaid entries and adds missing employees. Paid entries stay locked.
         </p>
       )}
 
@@ -95,16 +103,25 @@ export default function Payroll({ period, setPeriod }) {
                 <Badge kind={e.status === 'paid' ? 'ok' : 'danger'}>{e.status === 'paid' ? 'Paid' : 'Unpaid'}</Badge>
               </div>
             </button>
-            {e.status === 'unpaid' && (
-              <div className="mt-2.5 flex gap-2 border-t border-line pt-2.5">
-                <Button variant="ghost" className="!h-8 flex-1 !rounded-lg !text-xs" onClick={() => setEditingEntry(e)}>
-                  {e.pay_type === 'fixed' ? 'Edit Deductions' : 'Edit Count'}
+            <div className="mt-2.5 flex gap-2 border-t border-line pt-2.5">
+              {e.status === 'unpaid' ? (
+                <>
+                  <Button variant="ghost" className="!h-8 flex-1 !rounded-lg !text-xs" onClick={() => setEditingEntry(e)}>
+                    {e.pay_type === 'fixed' ? 'Edit Deductions' : 'Edit Count'}
+                  </Button>
+                  <Button variant="ghost" className="!h-8 flex-1 !rounded-lg !text-xs" onClick={() => onRevert(e)}>
+                    Revert
+                  </Button>
+                  <Button variant="soft" className="!h-8 flex-1 !rounded-lg !text-xs" onClick={() => setPayslipEntry(e)}>
+                    Payslip / Pay
+                  </Button>
+                </>
+              ) : (
+                <Button variant="dangerSoft" className="!h-8 flex-1 !rounded-lg !text-xs" onClick={() => setConfirmRevert(e)}>
+                  Revert to Unpaid & Recalculate
                 </Button>
-                <Button variant="soft" className="!h-8 flex-1 !rounded-lg !text-xs" onClick={() => setPayslipEntry(e)}>
-                  Payslip / Pay
-                </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -120,6 +137,16 @@ export default function Payroll({ period, setPeriod }) {
             setEditingEntry(null)
           } catch (e) { toast(e.message, 'error') }
         }}
+      />
+
+      <Confirm
+        open={!!confirmRevert}
+        onClose={() => setConfirmRevert(null)}
+        title="Revert this paid entry?"
+        message={`${confirmRevert?.employee?.full_name || 'This employee'}'s ${fmtMoney(confirmRevert?.net || 0)} payment will be removed, the entry returns to Unpaid, and it is recalculated from the current employee setup and cash advances.`}
+        confirmLabel="Revert & Recalculate"
+        danger
+        onConfirm={() => onRevert(confirmRevert)}
       />
 
       <PayslipSheet
