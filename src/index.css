@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+@theme {
+  /* Light frosted palette: #f7fbff #e8f4ff #d6ecff #c4dde9 #b7c4cd.
+     Dark mode overrides these same variables under html.dark below. */
+  --color-bg: #f7fbff;
+  --color-card: #ffffffb3;   /* frosted card */
+  --color-card2: #e8f4ff;
+  --color-surface: #ffffff;  /* opaque elevated surface (sheets, nav, active tab) */
+  --color-line: #c4dde9;
+  --color-ink: #243646;
+  --color-ink2: #54687a;
+  --color-ink3: #8499aa;
+  --color-accent: #17a653;   /* green: positive / action only */
+  --color-accent-dim: #dcf3e6;
+  --color-accent-deep: #c8ecd8;
+  --color-danger: #d93840;   /* red: danger / unpaid / negative only */
+  --color-danger-dim: #fce8e9;
+  --color-warn: #9a6700;
+  --color-warn-dim: #faf0d3;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius-2xl: 1.25rem;
+}
+
+:root {
+  --app-bg: linear-gradient(180deg, #f7fbff 0%, #e8f4ff 55%, #d6ecff 100%);
+  --hero: linear-gradient(135deg, #d6ecff 0%, #e8f4ff 55%, rgba(255, 255, 255, 0.75) 100%);
+  --hero-red: linear-gradient(135deg, #fce8e9 0%, #fdf2f3 55%, rgba(255, 255, 255, 0.75) 100%);
+  --scrim: rgba(36, 54, 70, 0.32);
+  --shadow-card: 0 1px 3px rgba(110, 138, 160, 0.10), 0 6px 20px rgba(110, 138, 160, 0.08);
+  --shadow-hero: 0 8px 28px rgba(110, 138, 160, 0.18);
+  color-scheme: light;
+}
+
+/* Premium dark mode — deep charcoal, banking-app style. */
+html.dark {
+  --color-bg: #0e1114;
+  --color-card: #1a2026cc;
+  --color-card2: #232b32;
+  --color-surface: #1c2329;
+  --color-line: #2d363f;
+  --color-ink: #eef2f5;
+  --color-ink2: #9aa7b3;
+  --color-ink3: #64717e;
+  --color-accent: #2bc46c;
+  --color-accent-dim: #15301f;
+  --color-accent-deep: #173824;
+  --color-danger: #f06066;
+  --color-danger-dim: #381a1c;
+  --color-warn: #e0b13e;
+  --color-warn-dim: #352a10;
+  --app-bg: linear-gradient(180deg, #0e1114 0%, #12171c 55%, #0e1216 100%);
+  --hero: linear-gradient(135deg, #123524 0%, #0d2c1c 50%, #151b21 100%);
+  --hero-red: linear-gradient(135deg, #34191c 0%, #271518 50%, #151b21 100%);
+  --scrim: rgba(0, 0, 0, 0.58);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 20px rgba(0, 0, 0, 0.28);
+  --shadow-hero: 0 8px 28px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-bg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--app-bg);
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+  transition: color 0.25s ease;
+}
+
+/* Themed helper surfaces */
+.bg-hero { background-image: var(--hero); box-shadow: var(--shadow-hero); }
+.bg-hero-red { background-image: var(--hero-red); box-shadow: var(--shadow-hero); }
+.scrim { background: var(--scrim); }
+
+/* Soft elevation so frosted cards lift off the gradient background. */
+.bg-card { box-shadow: var(--shadow-card); }
+
+/* Native-app tap feedback for interactive cards/buttons. */
+.press { transition: transform 0.12s ease, opacity 0.12s ease; }
+.press:active { transform: scale(0.97); }
+
+/* Skeleton shimmer for loading states. */
+.skeleton {
+  background: linear-gradient(90deg, var(--color-card2) 25%, var(--color-line) 50%, var(--color-card2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+  opacity: 0.6;
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--color-line); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.97) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.anim-sheet { animation: sheet-up 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+.anim-fade { animation: fade-in 0.2s ease; }
+.anim-pop { animation: pop-in 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+.anim-page { animation: page-in 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-sheet, .anim-fade, .anim-pop, .anim-page, .skeleton { animation: none; }
+  .press:active { transform: none; }
+}
+
+@media print {
+  body { background: #fff; color: #000; }
+  .no-print { display: none !important; }
+  .print-area {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    color: #000;
+    padding: 24px;
+    overflow: visible;
+  }
+  /* Payslips always print light, regardless of the active theme. */
+  .print-area * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: #bbb !important;
+  }
+}
