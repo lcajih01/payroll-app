@@ -54,10 +54,10 @@ export function computeGross(payType, rate, units = 0) {
   throw new Error(`Unknown pay type: ${payType}`)
 }
 
-// Net = Gross - Cash Advances - Other Deductions - Employee Benefit Shares.
-// Never below zero.
-export function computeNet(gross, caDeduction = 0, otherDeduction = 0, employeeBenefits = 0) {
-  const net = toCents(gross) - toCents(caDeduction) - toCents(otherDeduction) - toCents(employeeBenefits)
+// Net = Gross + Adjustment - Cash Advances - Employee Benefit Shares.
+// Adjustment is SIGNED: positive adds pay, negative deducts. Never below zero.
+export function computeNet(gross, { adjustment = 0, caDeduction = 0, employeeBenefits = 0 } = {}) {
+  const net = toCents(gross) + toCents(adjustment) - toCents(caDeduction) - toCents(employeeBenefits)
   return toPesos(Math.max(0, net))
 }
 
@@ -113,10 +113,11 @@ export function cashAdvanceTotal(cashAdvances, employeeId, year, month, cutoff) 
 // Build a payroll entry snapshot for an employee at generation time.
 // Rates and computed values are frozen into the entry so later rate edits
 // never change payroll history.
-export function buildEntry(employee, { year, month, cutoff, units = 0, caDeduction = 0, otherDeduction = 0, benefitRates = DEFAULT_BENEFIT_RATES }) {
+export function buildEntry(employee, { year, month, cutoff, units = 0, caDeduction = 0, adjustment = 0, benefitRates = DEFAULT_BENEFIT_RATES }) {
   const u = employee.pay_type === 'fixed' ? 1 : Number(units) || 0
   const gross = computeGross(employee.pay_type, employee.rate, u)
   const benefits = computeBenefits(employee, benefitRates, cutoff)
+  const adj = Number(adjustment) || 0
   return {
     employee_id: employee.id,
     business_id: employee.business_id,
@@ -125,9 +126,9 @@ export function buildEntry(employee, { year, month, cutoff, units = 0, caDeducti
     units: u,
     gross,
     ca_deduction: Number(caDeduction) || 0,
-    other_deduction: Number(otherDeduction) || 0,
+    adjustment: adj,
     ...benefits,
-    net: computeNet(gross, caDeduction, otherDeduction, benefits.total_employee_benefits),
+    net: computeNet(gross, { adjustment: adj, caDeduction, employeeBenefits: benefits.total_employee_benefits }),
     company_cost: computeCompanyCost(gross, benefits.total_employer_contributions),
     status: 'unpaid',
     paid_at: null,
@@ -135,18 +136,18 @@ export function buildEntry(employee, { year, month, cutoff, units = 0, caDeducti
   }
 }
 
-// Recompute a single entry after units / deduction edits. Benefit amounts are
+// Recompute a single entry after units / adjustment edits. Benefit amounts are
 // snapshots and stay as-is here (see refreshEntryBenefits to re-apply rates).
 // Paid entries are immutable — returned unchanged.
-export function recomputeEntry(entry, { units, caDeduction, otherDeduction } = {}) {
+export function recomputeEntry(entry, { units, caDeduction, adjustment } = {}) {
   if (entry.status === 'paid') return entry
   const u = entry.pay_type === 'fixed' ? 1 : (units !== undefined ? Number(units) || 0 : entry.units)
   const ca = caDeduction !== undefined ? Number(caDeduction) || 0 : entry.ca_deduction
-  const other = otherDeduction !== undefined ? Number(otherDeduction) || 0 : entry.other_deduction
+  const adj = adjustment !== undefined ? Number(adjustment) || 0 : entry.adjustment
   const gross = computeGross(entry.pay_type, entry.rate, u)
   return {
-    ...entry, units: u, gross, ca_deduction: ca, other_deduction: other,
-    net: computeNet(gross, ca, other, entry.total_employee_benefits || 0),
+    ...entry, units: u, gross, ca_deduction: ca, adjustment: adj,
+    net: computeNet(gross, { adjustment: adj, caDeduction: ca, employeeBenefits: entry.total_employee_benefits || 0 }),
     company_cost: computeCompanyCost(gross, entry.total_employer_contributions || 0),
   }
 }
@@ -159,7 +160,7 @@ export function refreshEntryBenefits(entry, employee, rates = DEFAULT_BENEFIT_RA
   const benefits = computeBenefits(employee, rates, cutoff)
   return {
     ...entry, ...benefits,
-    net: computeNet(entry.gross, entry.ca_deduction, entry.other_deduction, benefits.total_employee_benefits),
+    net: computeNet(entry.gross, { adjustment: entry.adjustment, caDeduction: entry.ca_deduction, employeeBenefits: benefits.total_employee_benefits }),
     company_cost: computeCompanyCost(entry.gross, benefits.total_employer_contributions),
   }
 }
@@ -197,12 +198,12 @@ export function sortEmployees(employees, businesses) {
 // Dashboard / payroll summary over a set of entries.
 // Remaining Payable counts ONLY unpaid entries.
 export function summarize(entries) {
-  let gross = 0, net = 0, paid = 0, remaining = 0, ca = 0, other = 0, ee = 0, er = 0, cost = 0
+  let gross = 0, net = 0, paid = 0, remaining = 0, ca = 0, adj = 0, ee = 0, er = 0, cost = 0
   for (const e of entries) {
     gross += toCents(e.gross)
     net += toCents(e.net)
     ca += toCents(e.ca_deduction)
-    other += toCents(e.other_deduction)
+    adj += toCents(e.adjustment || 0)
     ee += toCents(e.total_employee_benefits || 0)
     er += toCents(e.total_employer_contributions || 0)
     cost += toCents(e.company_cost ?? e.gross)
@@ -215,11 +216,11 @@ export function summarize(entries) {
     paidPayroll: toPesos(paid),
     remainingPayable: toPesos(remaining),
     cashAdvancesDeducted: toPesos(ca),
-    otherDeductions: toPesos(other),
+    adjustments: toPesos(adj),               // signed net of all adjustments
     benefitsDeducted: toPesos(ee),
     employerContributions: toPesos(er),
     companyCost: toPesos(cost),
-    totalDeductions: toPesos(ca + other + ee),
+    totalDeductions: toPesos(ca + ee),       // true deductions; adjustment excluded
     entryCount: entries.length,
     paidCount: entries.filter(e => e.status === 'paid').length,
   }

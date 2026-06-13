@@ -53,18 +53,20 @@ describe('cash advance deduction', () => {
     expect(cashAdvanceTotal(cas, 'e3', 2026, 6, 1)).toBe(0)
   })
 
-  it('net = gross - cash advances - other deductions', () => {
-    expect(computeNet(6500, 5000, 0)).toBe(1500)
-    expect(computeNet(6500, 5000, 1000)).toBe(500)
-    expect(computeNet(5850, 0, 0)).toBe(5850)
+  it('net = gross + adjustment - cash advances', () => {
+    expect(computeNet(6500, { caDeduction: 5000 })).toBe(1500)
+    expect(computeNet(6500, { caDeduction: 5000, adjustment: -1000 })).toBe(500)  // negative adjustment deducts
+    expect(computeNet(6500, { caDeduction: 5000, adjustment: 1000 })).toBe(2500)  // positive adjustment adds
+    expect(computeNet(5850)).toBe(5850)
   })
 
   it('net never goes below zero', () => {
-    expect(computeNet(1000, 5000, 0)).toBe(0)
+    expect(computeNet(1000, { caDeduction: 5000 })).toBe(0)
+    expect(computeNet(1000, { adjustment: -5000 })).toBe(0)
   })
 
   it('decimal-safe: 0.1 + 0.2 style amounts do not drift', () => {
-    expect(computeNet(100.1, 100.2 - 100, 0)).toBe(99.9)
+    expect(computeNet(100.1, { caDeduction: 100.2 - 100 })).toBe(99.9)
   })
 })
 
@@ -90,11 +92,13 @@ describe('entry generation (snapshot semantics)', () => {
     dailyEmp.rate = 450
   })
 
-  it('recompute updates units and deductions for unpaid entries', () => {
+  it('recompute updates units and adjustment for unpaid entries', () => {
     const e = buildEntry(dailyEmp, { ...cutoff, units: 10 })
-    const r = recomputeEntry(e, { units: 12, otherDeduction: 200 })
+    const r = recomputeEntry(e, { units: 12, adjustment: -200 })
     expect(r.gross).toBe(5400)
-    expect(r.net).toBe(5200)
+    expect(r.net).toBe(5200)  // 5400 - 200
+    const r2 = recomputeEntry(e, { units: 12, adjustment: 200 })
+    expect(r2.net).toBe(5600) // 5400 + 200
   })
 
   it('recompute is a no-op on paid entries', () => {
@@ -138,7 +142,7 @@ describe('summary / remaining payable', () => {
   const entries = [
     markPaid(buildEntry(fixedEmp, { ...cutoff, caDeduction: 5000 }), { method: 'Cash' }), // net 1500, paid
     buildEntry(dailyEmp, { ...cutoff, units: 13 }),                                       // net 5850, unpaid
-    buildEntry(perUnitEmp, { ...cutoff, units: 12, otherDeduction: 600 }),                // net 3000, unpaid
+    buildEntry(perUnitEmp, { ...cutoff, units: 12, adjustment: -600 }),                   // net 3000, unpaid
   ]
 
   it('remaining payable includes ONLY unpaid payroll', () => {
@@ -148,7 +152,8 @@ describe('summary / remaining payable', () => {
     expect(s.grossPayroll).toBe(6500 + 5850 + 3600)
     expect(s.netPayroll).toBe(1500 + 5850 + 3000)
     expect(s.cashAdvancesDeducted).toBe(5000)
-    expect(s.totalDeductions).toBe(5600)
+    expect(s.adjustments).toBe(-600)         // signed sum of adjustments
+    expect(s.totalDeductions).toBe(5000)     // ca + benefits only; adjustment excluded
     expect(s.paidCount).toBe(1)
   })
 

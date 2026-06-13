@@ -9,6 +9,13 @@ export function fmtMoney(n) {
   return peso.format(Number(n) || 0)
 }
 
+// Signed money for adjustments: +₱500.00 / -₱500.00 / ₱0.00
+export function fmtSigned(n) {
+  const v = Number(n) || 0
+  if (v === 0) return peso.format(0)
+  return (v > 0 ? '+' : '-') + peso.format(Math.abs(v))
+}
+
 export function fmtMoneyShort(n) {
   const v = Number(n) || 0
   if (Math.abs(v) >= 1_000_000) return '₱' + (v / 1_000_000).toFixed(2) + 'M'

@@ -49,7 +49,7 @@ describe('Settings -> Reset Demo Data button', () => {
     await supabase.from('payroll_entries').insert({
       period_id: period.id, employee_id: emp.id, business_id: emp.business_id,
       pay_type: emp.pay_type, rate: emp.rate, units: 1, gross: 6500, net: 6500,
-      ca_deduction: 0, other_deduction: 0, status: 'unpaid', paid_at: null, payment_method: null,
+      ca_deduction: 0, adjustment: 0, status: 'unpaid', paid_at: null, payment_method: null,
     })
     const { data: dirtyCAs } = await supabase.from('cash_advances').select('*')
     expect(dirtyCAs.length).toBe(SEED_CASH_ADVANCES.length + 1)

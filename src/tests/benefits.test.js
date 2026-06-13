@@ -122,14 +122,14 @@ describe('payroll with benefits (2nd cutoff)', () => {
     expect(e.company_cost).toBe(3600 + ER)   // 4210
   })
 
-  it('net pay = gross - cash advances - other deductions - employee benefits', () => {
-    expect(computeNet(6500, 5000, 1000, EE)).toBe(6500 - 5000 - 1000 - 350) // 150
+  it('net pay = gross + adjustment - cash advances - employee benefits', () => {
+    expect(computeNet(6500, { caDeduction: 5000, adjustment: -1000, employeeBenefits: EE })).toBe(6500 - 5000 - 1000 - 350) // 150
     const emp = { id: 'e1', business_id: 'b1', pay_type: 'fixed', rate: 13000, ...allBenefits }
-    const e = buildEntry(emp, { ...cutoff2, caDeduction: 5000, otherDeduction: 1000 })
+    const e = buildEntry(emp, { ...cutoff2, caDeduction: 5000, adjustment: -1000 })
     expect(e.net).toBe(150)
   })
 
-  it('company cost = gross + employer contributions (CA/other do not affect it)', () => {
+  it('company cost = gross + employer contributions (CA/adjustment do not affect it)', () => {
     expect(computeCompanyCost(6500, ER)).toBe(7110)
     const emp = { id: 'e1', business_id: 'b1', pay_type: 'fixed', rate: 13000, ...allBenefits }
     const e = buildEntry(emp, { ...cutoff2, caDeduction: 5000 })
@@ -199,11 +199,14 @@ describe('employee vs employer contribution contract', () => {
     expect(a.company_cost).toBe(b.company_cost + ER_TOTAL) // cost moves with ER
   })
 
-  it('net formula matches spec: gross - CA - other - employee contributions', () => {
+  it('net formula matches spec: gross + adjustment - CA - employee contributions', () => {
     const emp = { id: 'f', business_id: 'b', pay_type: 'fixed', rate: 13000, ...allBenefits }
-    const e = buildEntry(emp, { ...cutoff2, caDeduction: 2000, otherDeduction: 500, benefitRates: rates })
-    expect(e.net).toBe(6500 - 2000 - 500 - EE_TOTAL) // 3400
-    expect(e.company_cost).toBe(6500 + ER_TOTAL)     // CA/other never touch company cost
+    const e = buildEntry(emp, { ...cutoff2, caDeduction: 2000, adjustment: -500, benefitRates: rates })
+    expect(e.net).toBe(6500 - 500 - 2000 - EE_TOTAL) // 3400
+    expect(e.company_cost).toBe(6500 + ER_TOTAL)     // CA/adjustment never touch company cost
+    // a positive adjustment adds to net
+    const ePlus = buildEntry(emp, { ...cutoff2, caDeduction: 2000, adjustment: 500, benefitRates: rates })
+    expect(ePlus.net).toBe(6500 + 500 - 2000 - EE_TOTAL) // 4400
   })
 
   it('summary: employer total is reported separately and never inside deductions', () => {

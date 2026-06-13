@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useData } from '../context/DataContext'
 import { summarize, employeeComparator, PAY_TYPES } from '../lib/payroll'
-import { fmtMoney } from '../lib/format'
+import { fmtMoney, fmtSigned } from '../lib/format'
 import PeriodPicker from '../components/PeriodPicker'
 import PayslipSheet from '../components/Payslip'
 import { Sheet, Button, Field, Input, Avatar, Badge, EmptyState, Confirm, useToast } from '../components/ui'
@@ -96,6 +96,7 @@ export default function Payroll({ period, setPeriod }) {
                   {e.pay_type !== 'fixed' && ` · ${e.units} ${e.pay_type === 'daily' ? 'day(s)' : 'unit(s)'}`}
                   {e.ca_deduction > 0 && ` · CA −${fmtMoney(e.ca_deduction)}`}
                   {Number(e.total_employee_benefits) > 0 && ` · Benefits −${fmtMoney(e.total_employee_benefits)}`}
+                  {Number(e.adjustment) !== 0 && ` · Adjustment ${fmtSigned(e.adjustment)}`}
                 </p>
               </div>
               <div className="text-right">
@@ -107,7 +108,7 @@ export default function Payroll({ period, setPeriod }) {
               {e.status === 'unpaid' ? (
                 <>
                   <Button variant="ghost" className="!h-8 flex-1 !rounded-lg !text-xs" onClick={() => setEditingEntry(e)}>
-                    {e.pay_type === 'fixed' ? 'Edit Deductions' : 'Edit Count'}
+                    {e.pay_type === 'fixed' ? 'Edit Adjustment' : 'Edit Count'}
                   </Button>
                   <Button variant="ghost" className="!h-8 flex-1 !rounded-lg !text-xs" onClick={() => onRevert(e)}>
                     Revert
@@ -130,9 +131,9 @@ export default function Payroll({ period, setPeriod }) {
         key={editingEntry?.id || 'closed'}
         entry={editingEntry}
         onClose={() => setEditingEntry(null)}
-        onSave={async (units, other) => {
+        onSave={async (units, adjustment) => {
           try {
-            await updateEntry(editingEntry.id, { units, otherDeduction: other })
+            await updateEntry(editingEntry.id, { units, adjustment })
             toast('Entry recomputed')
             setEditingEntry(null)
           } catch (e) { toast(e.message, 'error') }
@@ -179,7 +180,7 @@ function Chip({ label, value, accent = false, danger = false }) {
 
 function EditEntrySheet({ entry, onClose, onSave }) {
   const [units, setUnits] = useState(entry ? String(entry.units) : '0')
-  const [other, setOther] = useState(entry ? String(entry.other_deduction) : '0')
+  const [adjustment, setAdjustment] = useState(entry ? String(entry.adjustment ?? 0) : '0')
   const [busy, setBusy] = useState(false)
   if (!entry) return null
   const unitLabel = PAY_TYPES[entry.pay_type].unitLabel
@@ -192,12 +193,12 @@ function EditEntrySheet({ entry, onClose, onSave }) {
             <Input type="number" inputMode="decimal" min="0" value={units} onChange={e => setUnits(e.target.value)} />
           </Field>
         )}
-        <Field label="Other Deductions (₱)" hint="Cash advances are deducted automatically and managed in the Advances tab.">
-          <Input type="number" inputMode="decimal" min="0" value={other} onChange={e => setOther(e.target.value)} />
+        <Field label="Adjustment (+ add pay, - deduct pay)" hint="Use + for additional pay, - for deduction. Cash advances are managed in the Advances tab.">
+          <Input type="number" inputMode="text" step="any" value={adjustment} onChange={e => setAdjustment(e.target.value)} placeholder="0.00" />
         </Field>
         <Button className="w-full" disabled={busy} onClick={async () => {
           setBusy(true)
-          await onSave(Number(units) || 0, Number(other) || 0)
+          await onSave(Number(units) || 0, Number(adjustment) || 0)
           setBusy(false)
         }}>
           {busy ? 'Saving…' : 'Recompute & Save'}

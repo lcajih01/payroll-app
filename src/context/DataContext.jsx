@@ -184,15 +184,15 @@ export function DataProvider({ children }) {
 
   // Rebuild an unpaid entry's persisted fields from the CURRENT employee
   // setup (rate, pay type, business, benefit checkboxes), current benefit
-  // rates and current cash advances. Owner-entered units and other
-  // deductions are preserved.
+  // rates and current cash advances. Owner-entered units and the manual
+  // adjustment are preserved.
   const rebuildFields = useCallback((emp, { year, month, cutoff }, current) => {
     const caTotal = cashAdvanceTotal(cashAdvances, emp.id, year, month, cutoff)
     const rebuilt = buildEntry(emp, {
       year, month, cutoff,
       units: current.units,
       caDeduction: caTotal,
-      otherDeduction: current.other_deduction,
+      adjustment: current.adjustment,
       benefitRates,
     })
     return {
@@ -202,7 +202,7 @@ export function DataProvider({ children }) {
       units: rebuilt.units,
       gross: rebuilt.gross,
       ca_deduction: rebuilt.ca_deduction,
-      other_deduction: rebuilt.other_deduction,
+      adjustment: rebuilt.adjustment,
       ...benefitEntryFields(rebuilt),
     }
   }, [cashAdvances, benefitRates])
@@ -290,14 +290,14 @@ export function DataProvider({ children }) {
     return { period, created: inserts.length, refreshed: updates.length }
   }, [employees, entries, cashAdvances, benefitRates, rebuildFields])
 
-  // Edit units / other deduction on an unpaid entry; recomputes and persists.
-  const updateEntry = useCallback(async (entryId, { units, otherDeduction }) => {
+  // Edit units / adjustment on an unpaid entry; recomputes and persists.
+  const updateEntry = useCallback(async (entryId, { units, adjustment }) => {
     const entry = entries.find(e => e.id === entryId)
     if (!entry) throw new Error('Entry not found')
     if (entry.status === 'paid') throw new Error('Paid entries cannot be edited. Undo payment first.')
-    const updated = recomputeEntry(entry, { units, otherDeduction })
+    const updated = recomputeEntry(entry, { units, adjustment })
     const { data, error } = await supabase.from('payroll_entries')
-      .update({ units: updated.units, gross: updated.gross, other_deduction: updated.other_deduction, net: updated.net, company_cost: updated.company_cost })
+      .update({ units: updated.units, gross: updated.gross, adjustment: updated.adjustment, net: updated.net, company_cost: updated.company_cost })
       .eq('id', entryId).eq('status', 'unpaid').select().single()
     if (error) throw error
     setEntries(prev => prev.map(e => e.id === entryId ? data : e))

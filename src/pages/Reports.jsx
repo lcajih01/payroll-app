@@ -24,7 +24,7 @@ export default function Reports({ goTo }) {
   }, [periods, entries, employees, businesses])
 
   const exportCSV = (p) => {
-    const head = ['Employee', 'Business', 'Pay Type', 'Rate', 'Units', 'Gross', 'Cash Advance', 'Other Deductions',
+    const head = ['Employee', 'Business', 'Pay Type', 'Rate', 'Units', 'Gross', 'Cash Advance', 'Adjustment',
       'SSS (EE)', 'PhilHealth (EE)', 'Pag-IBIG (EE)', 'Total Benefits (EE)', 'Net Pay',
       'SSS (ER)', 'PhilHealth (ER)', 'Pag-IBIG (ER)', 'Total Employer Share', 'Company Cost',
       'Status', 'Payment Method', 'Payment Date']
@@ -32,7 +32,7 @@ export default function Reports({ goTo }) {
       e.employee?.full_name || 'Unknown',
       businesses.find(b => b.id === e.business_id)?.name || '',
       PAY_TYPES[e.pay_type].label,
-      e.rate, e.units, e.gross, e.ca_deduction, e.other_deduction,
+      e.rate, e.units, e.gross, e.ca_deduction, e.adjustment ?? 0,
       e.sss_employee ?? 0, e.philhealth_employee ?? 0, e.pagibig_employee ?? 0, e.total_employee_benefits ?? 0, e.net,
       e.sss_employer ?? 0, e.philhealth_employer ?? 0, e.pagibig_employer ?? 0, e.total_employer_contributions ?? 0, e.company_cost ?? e.gross,
       e.status, e.payment_method || '', e.paid_at ? fmtDate(e.paid_at) : '',

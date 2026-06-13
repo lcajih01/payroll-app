@@ -39,7 +39,7 @@ describe('reset demo data', () => {
     const { data: entry } = await client.from('payroll_entries').insert({
       period_id: period.id, employee_id: emp.id, business_id: emp.business_id,
       pay_type: emp.pay_type, rate: emp.rate, units: 1,
-      gross: 6500, ca_deduction: 0, other_deduction: 0, net: 6500,
+      gross: 6500, ca_deduction: 0, adjustment: 0, net: 6500,
       status: 'paid', paid_at: '2026-06-12T00:00:00Z', payment_method: 'Cash',
     }).select().single()
     await client.from('payroll_payments').insert({

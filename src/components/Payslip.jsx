@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Sheet, Button, Badge, Field, Select, Confirm } from './ui'
-import { fmtMoney, fmtDate } from '../lib/format'
+import { fmtMoney, fmtSigned, fmtDate } from '../lib/format'
 import { PAY_TYPES, CUTOFFS, BENEFITS, monthName } from '../lib/payroll'
 
 const PAYMENT_METHODS = ['Cash', 'GCash', 'Bank Transfer', 'Check']
@@ -43,7 +43,7 @@ export default function PayslipSheet({ entry, employee, business, period, onClos
         <div className="space-y-2.5 rounded-2xl border border-line bg-card2 p-4 text-sm">
           <Row label={grossLabel(entry)} value={fmtMoney(entry.gross)} />
           <Row label="Cash Advance" value={entry.ca_deduction ? `− ${fmtMoney(entry.ca_deduction)}` : fmtMoney(0)} dim={!entry.ca_deduction} />
-          <Row label="Other Deductions" value={entry.other_deduction ? `− ${fmtMoney(entry.other_deduction)}` : fmtMoney(0)} dim={!entry.other_deduction} />
+          <Row label="Adjustment" value={fmtSigned(entry.adjustment)} dim={!Number(entry.adjustment)} />
           {BENEFIT_KEYS.filter(k => Number(entry[`${k}_employee`]) > 0).map(k => (
             <Row key={k} label={`${BENEFITS[k].label} (employee share)`} value={`− ${fmtMoney(entry[`${k}_employee`])}`} />
           ))}

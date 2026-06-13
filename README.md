@@ -7,7 +7,7 @@ Built with React + Vite + Tailwind CSS v4 + Supabase. Owner-operated, 10–50 em
 
 - **Dashboard** — per-cutoff Gross / Net / Paid / Remaining Payable / Cash Advances / Benefits / Company Cost / Active Employees, recent payroll status
 - **Employees** — add, edit, archive (soft delete), search, business filter; Fixed Monthly, Daily, and Per Occupied Day / Booking pay types; SSS / PhilHealth / Pag-IBIG checkboxes per employee
-- **Government Benefits** — monthly SSS / PhilHealth / Pag-IBIG amounts (employee + employer share) editable in Settings; deducted **in full on the 2nd cutoff** of each month (no benefit deductions on the 1st cutoff). Net Pay = Gross − Cash Advances − Other Deductions − employee benefit shares; Company Cost = Gross + employer contributions
+- **Government Benefits** — monthly SSS / PhilHealth / Pag-IBIG amounts (employee + employer share) editable in Settings; deducted **in full on the 2nd cutoff** of each month (no benefit deductions on the 1st cutoff). Net Pay = Gross + Adjustment − Cash Advances − employee benefit shares; Company Cost = Gross + employer contributions. **Adjustment** is a single signed per-entry field (set in Edit Payroll Entry): positive adds pay, negative deducts.
 - **Payroll** — generate per year/month/cutoff/business, edit day/booking counts, auto recompute, mark paid (method + date), undo paid, payslips with benefit breakdown and employer contributions
 - **Cash Advances** — assigned to a payroll cutoff and auto-deducted from it
 - **Reports** — payroll history, payslip view, printable payslips, CSV export
